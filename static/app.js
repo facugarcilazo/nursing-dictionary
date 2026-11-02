@@ -1,4 +1,8 @@
 const MIN_GRID_ROWS = 25;
+const STORAGE_KEY = 'nursing_dictionary_entries_v1';
+
+// Detecta automáticamente si está corriendo en GitHub Pages (.github.io) o como archivo estático
+const IS_STATIC_HOST = window.location.hostname.endsWith('github.io') || window.location.protocol === 'file:';
 
 function escapeHtml(text) {
     const div = document.createElement('div');
@@ -13,6 +17,39 @@ function escapeAttr(text) {
         .replace(/'/g, '&#39;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
+}
+
+function formatNow() {
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+}
+
+function getLocalEntries() {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function saveLocalEntries(entries) {
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+    } catch (e) {
+        console.error('Error guardando en localStorage:', e);
+    }
+}
+
+function getSortedLocalEntries(sortBy = 'fecha') {
+    const entries = [...getLocalEntries()];
+    if (sortBy === 'alfabetico') {
+        entries.sort((a, b) => (a.word || '').toLowerCase().localeCompare((b.word || '').toLowerCase()));
+    } else {
+        entries.sort((a, b) => (a.timestamp || a.id) - (b.timestamp || b.id));
+    }
+    return entries;
 }
 
 function showNotification(message, type = 'success') {
@@ -45,7 +82,7 @@ function renderGrid(entries, highlightId = null) {
 
     entries.forEach((entry, index) => {
         const rowNum = index + 3; // Fila 1 es el título, Fila 2 son los encabezados
-        const isHighlighted = highlightId && entry.id === highlightId ? 'row-just-added' : '';
+        const isHighlighted = highlightId && String(entry.id) === String(highlightId) ? 'row-just-added' : '';
         const isEditing = currentEditId && String(entry.id) === String(currentEditId) ? 'row-editing' : '';
         html += `
             <tr class="data-row ${isHighlighted} ${isEditing}"
@@ -143,7 +180,6 @@ function startEdit(btnElement) {
         subtitle.innerHTML = `Modificando palabra: <strong style="color: var(--neon-blue);">${escapeHtml(word)}</strong>`;
     }
 
-    // Marcar visualmente la fila que se está editando
     document.querySelectorAll('#dictionary-tbody tr.data-row').forEach(tr => {
         tr.classList.toggle('row-editing', tr.getAttribute('data-id') === String(entryId));
     });
@@ -213,13 +249,22 @@ function updateSortUI(sortBy) {
         }
     }
 
-    const url = new URL(window.location);
-    url.searchParams.set('orden', sortBy);
-    window.history.replaceState({}, '', url);
+    try {
+        const url = new URL(window.location);
+        url.searchParams.set('orden', sortBy);
+        window.history.replaceState({}, '', url);
+    } catch (e) {}
 }
 
 async function changeSort(event, sortBy) {
     if (event) event.preventDefault();
+
+    if (IS_STATIC_HOST) {
+        updateSortUI(sortBy);
+        renderGrid(getSortedLocalEntries(sortBy));
+        return;
+    }
+
     try {
         const response = await fetch(`/api/palabras?orden=${encodeURIComponent(sortBy)}`);
         if (!response.ok) throw new Error('Error al ordenar las palabras');
@@ -227,7 +272,8 @@ async function changeSort(event, sortBy) {
         updateSortUI(data.orden);
         renderGrid(data.entries);
     } catch (err) {
-        window.location.href = `/?orden=${encodeURIComponent(sortBy)}`;
+        updateSortUI(sortBy);
+        renderGrid(getSortedLocalEntries(sortBy));
     }
 }
 
@@ -238,6 +284,19 @@ async function deleteEntry(entryId) {
     const sortInput = document.getElementById('current-sort-input');
     const currentSort = sortInput ? sortInput.value : 'fecha';
     const editIdInput = document.getElementById('edit-entry-id');
+
+    if (IS_STATIC_HOST) {
+        const entries = getLocalEntries();
+        const target = entries.find(e => String(e.id) === String(entryId));
+        const filtered = entries.filter(e => String(e.id) !== String(entryId));
+        saveLocalEntries(filtered);
+        if (editIdInput && String(editIdInput.value) === String(entryId)) {
+            cancelEdit(true);
+        }
+        renderGrid(getSortedLocalEntries(currentSort));
+        showNotification(`Palabra "${target ? target.word : ''}" eliminada.`, 'success');
+        return;
+    }
 
     try {
         const response = await fetch(`/eliminar/${entryId}?orden=${encodeURIComponent(currentSort)}`, {
@@ -264,6 +323,15 @@ async function deleteEntry(entryId) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Si estamos en GitHub Pages (.github.io) o el tbody está vacío, renderizar la grilla inicial
+    const tbody = document.getElementById('dictionary-tbody');
+    if (IS_STATIC_HOST || (tbody && tbody.children.length === 0)) {
+        const params = new URLSearchParams(window.location.search);
+        const initialSort = params.get('orden') === 'alfabetico' ? 'alfabetico' : 'fecha';
+        updateSortUI(initialSort);
+        renderGrid(getSortedLocalEntries(initialSort));
+    }
+
     const initialAlerts = document.querySelectorAll('#notification-area .alert');
     initialAlerts.forEach((alert) => {
         setTimeout(() => {
@@ -301,6 +369,48 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!payload.word || !payload.meaning || !payload.student_name) {
                 showNotification("Por favor completá Word, Meaning y Student's Name Collaborator.", 'error');
+                return;
+            }
+
+            if (IS_STATIC_HOST) {
+                const entries = getLocalEntries();
+                let targetId = editId;
+
+                if (isEditing) {
+                    const idx = entries.findIndex(item => String(item.id) === String(editId));
+                    if (idx !== -1) {
+                        entries[idx].word = payload.word;
+                        entries[idx].meaning = payload.meaning;
+                        entries[idx].pronunciation = payload.pronunciation;
+                        entries[idx].example = payload.example;
+                        entries[idx].student_name = payload.student_name;
+                    }
+                    saveLocalEntries(entries);
+                    cancelEdit(true);
+                    renderGrid(getSortedLocalEntries(payload.orden), targetId);
+                    showNotification(`¡Los cambios en "${payload.word}" fueron guardados con éxito!`, 'success');
+                } else {
+                    const nowMs = Date.now();
+                    targetId = nowMs;
+                    entries.push({
+                        id: nowMs,
+                        timestamp: nowMs,
+                        word: payload.word,
+                        meaning: payload.meaning,
+                        pronunciation: payload.pronunciation,
+                        example: payload.example,
+                        student_name: payload.student_name,
+                        created_at: formatNow()
+                    });
+                    saveLocalEntries(entries);
+                    wordInput.value = '';
+                    meaningInput.value = '';
+                    pronunciationInput.value = '';
+                    exampleInput.value = '';
+                    renderGrid(getSortedLocalEntries(payload.orden), targetId);
+                    showNotification(`¡La palabra "${payload.word}" fue cargada con éxito!`, 'success');
+                }
+                wordInput.focus();
                 return;
             }
 

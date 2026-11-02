@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nursing Student's Dictionary</title>
+    <link rel="stylesheet" href="static/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="page-wrapper">
+        <!-- Mensajes de notificación -->
+        <div id="notification-area" class="flash-messages"></div>
+
+        <!-- PARTE SUPERIOR: Formulario de carga de vocabulario -->
+        <section class="form-panel" id="top-form-panel">
+            <div class="form-panel-header">
+                <div class="title-group">
+                    <h1>Nursing Student's <span class="neon-text-red">Dictionary</span></h1>
+                    <span class="subtitle" id="form-subtitle">Carga de vocabulario colaborativo para alumnos</span>
+                </div>
+                <div class="badge-counter">
+                    Palabras cargadas: <strong id="word-count">0</strong>
+                </div>
+            </div>
+
+            <form id="word-form" class="dictionary-form">
+                <input type="hidden" name="current_sort" id="current-sort-input" value="fecha">
+                <input type="hidden" name="edit_id" id="edit-entry-id" value="">
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="word">Word <span class="required">*</span></label>
+                        <input type="text" id="word" name="word" class="form-control" placeholder="Ej: Stethoscope" required autocomplete="off">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="meaning">Meaning <span class="required">*</span></label>
+                        <input type="text" id="meaning" name="meaning" class="form-control" placeholder="Ej: Estetoscopio / Instrumento médico..." required autocomplete="off">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="pronunciation">Pronunciation</label>
+                        <input type="text" id="pronunciation" name="pronunciation" class="form-control" placeholder="Ej: /ˈstɛθ.ə.skoʊp/" autocomplete="off">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="example">Example</label>
+                        <input type="text" id="example" name="example" class="form-control" placeholder="Ej: The nurse used a stethoscope to listen to the heart." autocomplete="off">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="student_name">Student's Name Collaborator <span class="required">*</span></label>
+                        <input type="text" id="student_name" name="student_name" class="form-control" placeholder="Ej: María Gómez" required autocomplete="off">
+                    </div>
+
+                    <div class="form-action">
+                        <button type="submit" id="btn-cargar" class="btn-cargar">
+                            Cargar
+                        </button>
+                        <button type="button" id="btn-cancelar" class="btn-cancelar" style="display: none;" onclick="cancelEdit()" title="Cancelar edición">
+                            Cancelar
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </section>
+
+        <!-- PARTE CENTRAL: Grilla fija por debajo -->
+        <section class="grid-section">
+            <div class="spreadsheet-container" id="grid-scroll-container">
+                <table class="spreadsheet-table" id="dictionary-table">
+                    <thead>
+                        <!-- Fila 1: Título principal combinado -->
+                        <tr class="sheet-title-row">
+                            <td class="row-num">1</td>
+                            <th colspan="5" class="sheet-main-title">Nursing Student's Dictionary</th>
+                        </tr>
+                        <!-- Fila 2: Encabezados de columnas -->
+                        <tr class="sheet-headers-row">
+                            <td class="row-num">2</td>
+                            <th class="col-word">Word</th>
+                            <th class="col-meaning">Meaning</th>
+                            <th class="col-pronunciation">Pronunciation</th>
+                            <th class="col-example">Example</th>
+                            <th class="col-student">Student's Name Collaborator</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dictionary-tbody">
+                        <!-- Renderizado dinámicamente por static/app.js -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- PARTE INFERIOR: Botones de ordenamiento debajo de la grilla -->
+        <footer class="bottom-controls">
+            <div class="sort-buttons-container">
+                <a href="?orden=fecha"
+                   id="btn-sort-fecha"
+                   class="btn-sort active"
+                   onclick="changeSort(event, 'fecha')">
+                    📅 Ordenar por fecha de carga
+                </a>
+
+                <a href="?orden=alfabetico"
+                   id="btn-sort-alfabetico"
+                   class="btn-sort"
+                   onclick="changeSort(event, 'alfabetico')">
+                    🔤 Ordenar alfabéticamente
+                </a>
+            </div>
+            <div class="sort-status" id="sort-status-text">
+                Vista actual: <strong>Ordenado por fecha de carga</strong>
+            </div>
+        </footer>
+    </div>
+
+    <script src="static/app.js"></script>
+</body>
+
+</html>
