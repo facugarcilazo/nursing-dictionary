@@ -220,7 +220,7 @@ function cancelEdit(clearStudent = true) {
         formPanel.classList.remove('editing-active');
     }
     if (subtitle) {
-        subtitle.textContent = 'Carga de vocabulario colaborativo para alumnos';
+        subtitle.textContent = 'Carga de vocabulario colaborativo para alumnos Enfermería 2026';
     }
 
     document.querySelectorAll('#dictionary-tbody tr.data-row.row-editing').forEach(tr => {
