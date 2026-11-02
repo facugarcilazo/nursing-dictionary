@@ -1,8 +1,11 @@
 const MIN_GRID_ROWS = 25;
 const STORAGE_KEY = 'nursing_dictionary_entries_v1';
 
-// Detecta automáticamente si está corriendo en GitHub Pages (.github.io) o como archivo estático
-const IS_STATIC_HOST = window.location.hostname.endsWith('github.io') || window.location.protocol === 'file:';
+// URL de Firebase Realtime Database para persistencia compartida en la nube en GitHub Pages (.github.io)
+const FIREBASE_DB_URL = 'https://nursing-dictionary-808e3-default-rtdb.firebaseio.com';
+
+// Usa la base de datos en la nube de Firebase siempre que esté configurada (tanto en .github.io como en local)
+const IS_STATIC_HOST = Boolean(FIREBASE_DB_URL) || window.location.hostname.endsWith('github.io') || window.location.protocol === 'file:';
 
 function escapeHtml(text) {
     const div = document.createElement('div');
@@ -42,14 +45,36 @@ function saveLocalEntries(entries) {
     }
 }
 
-function getSortedLocalEntries(sortBy = 'fecha') {
-    const entries = [...getLocalEntries()];
+function sortEntriesArray(entries, sortBy = 'fecha') {
+    const copy = [...entries];
     if (sortBy === 'alfabetico') {
-        entries.sort((a, b) => (a.word || '').toLowerCase().localeCompare((b.word || '').toLowerCase()));
+        copy.sort((a, b) => (a.word || '').toLowerCase().localeCompare((b.word || '').toLowerCase()));
     } else {
-        entries.sort((a, b) => (a.timestamp || a.id) - (b.timestamp || b.id));
+        copy.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
     }
-    return entries;
+    return copy;
+}
+
+async function fetchStaticEntries(sortBy = 'fecha') {
+    if (FIREBASE_DB_URL) {
+        try {
+            const cleanUrl = FIREBASE_DB_URL.replace(/\/+$/, '');
+            const res = await fetch(`${cleanUrl}/entries.json`);
+            if (res.ok) {
+                const data = await res.json();
+                const list = data
+                    ? Object.entries(data).map(([firebaseKey, val]) => ({
+                          ...val,
+                          id: firebaseKey
+                      }))
+                    : [];
+                return sortEntriesArray(list, sortBy);
+            }
+        } catch (err) {
+            console.error('Error conectando con Firebase:', err);
+        }
+    }
+    return sortEntriesArray(getLocalEntries(), sortBy);
 }
 
 function showNotification(message, type = 'success') {
@@ -86,7 +111,7 @@ function renderGrid(entries, highlightId = null) {
         const isEditing = currentEditId && String(entry.id) === String(currentEditId) ? 'row-editing' : '';
         html += `
             <tr class="data-row ${isHighlighted} ${isEditing}"
-                data-id="${entry.id}"
+                data-id="${escapeAttr(String(entry.id))}"
                 data-word="${escapeAttr(entry.word)}"
                 data-meaning="${escapeAttr(entry.meaning)}"
                 data-pronunciation="${escapeAttr(entry.pronunciation)}"
@@ -103,7 +128,7 @@ function renderGrid(entries, highlightId = null) {
                         <span class="student-name-text">${escapeHtml(entry.student_name)}</span>
                         <div class="row-actions">
                             <button type="button" class="btn-edit-row" onclick="startEdit(this)" title="Modificar palabra">✏️</button>
-                            <button type="button" class="btn-delete-row" onclick="deleteEntry(${entry.id})" title="Eliminar fila">&times;</button>
+                            <button type="button" class="btn-delete-row" onclick="deleteEntry('${escapeAttr(String(entry.id))}')" title="Eliminar fila">&times;</button>
                         </div>
                     </div>
                 </td>
@@ -129,7 +154,7 @@ function renderGrid(entries, highlightId = null) {
     tbody.innerHTML = html;
 
     if (highlightId) {
-        const addedRow = tbody.querySelector(`tr[data-id="${highlightId}"]`);
+        const addedRow = tbody.querySelector(`tr[data-id="${CSS.escape(String(highlightId))}"]`);
         if (addedRow) {
             addedRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
@@ -261,7 +286,8 @@ async function changeSort(event, sortBy) {
 
     if (IS_STATIC_HOST) {
         updateSortUI(sortBy);
-        renderGrid(getSortedLocalEntries(sortBy));
+        const entries = await fetchStaticEntries(sortBy);
+        renderGrid(entries);
         return;
     }
 
@@ -273,7 +299,8 @@ async function changeSort(event, sortBy) {
         renderGrid(data.entries);
     } catch (err) {
         updateSortUI(sortBy);
-        renderGrid(getSortedLocalEntries(sortBy));
+        const entries = await fetchStaticEntries(sortBy);
+        renderGrid(entries);
     }
 }
 
@@ -286,6 +313,20 @@ async function deleteEntry(entryId) {
     const editIdInput = document.getElementById('edit-entry-id');
 
     if (IS_STATIC_HOST) {
+        if (FIREBASE_DB_URL) {
+            const cleanUrl = FIREBASE_DB_URL.replace(/\/+$/, '');
+            await fetch(`${cleanUrl}/entries/${encodeURIComponent(entryId)}.json`, {
+                method: 'DELETE'
+            });
+            if (editIdInput && String(editIdInput.value) === String(entryId)) {
+                cancelEdit(true);
+            }
+            const entries = await fetchStaticEntries(currentSort);
+            renderGrid(entries);
+            showNotification('Palabra eliminada correctamente.', 'success');
+            return;
+        }
+
         const entries = getLocalEntries();
         const target = entries.find(e => String(e.id) === String(entryId));
         const filtered = entries.filter(e => String(e.id) !== String(entryId));
@@ -293,7 +334,7 @@ async function deleteEntry(entryId) {
         if (editIdInput && String(editIdInput.value) === String(entryId)) {
             cancelEdit(true);
         }
-        renderGrid(getSortedLocalEntries(currentSort));
+        renderGrid(sortEntriesArray(filtered, currentSort));
         showNotification(`Palabra "${target ? target.word : ''}" eliminada.`, 'success');
         return;
     }
@@ -322,14 +363,14 @@ async function deleteEntry(entryId) {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    // Si estamos en GitHub Pages (.github.io) o el tbody está vacío, renderizar la grilla inicial
+document.addEventListener('DOMContentLoaded', async () => {
     const tbody = document.getElementById('dictionary-tbody');
     if (IS_STATIC_HOST || (tbody && tbody.children.length === 0)) {
         const params = new URLSearchParams(window.location.search);
         const initialSort = params.get('orden') === 'alfabetico' ? 'alfabetico' : 'fecha';
         updateSortUI(initialSort);
-        renderGrid(getSortedLocalEntries(initialSort));
+        const entries = await fetchStaticEntries(initialSort);
+        renderGrid(entries);
     }
 
     const initialAlerts = document.querySelectorAll('#notification-area .alert');
@@ -372,51 +413,108 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            if (IS_STATIC_HOST) {
-                const entries = getLocalEntries();
-                let targetId = editId;
-
-                if (isEditing) {
-                    const idx = entries.findIndex(item => String(item.id) === String(editId));
-                    if (idx !== -1) {
-                        entries[idx].word = payload.word;
-                        entries[idx].meaning = payload.meaning;
-                        entries[idx].pronunciation = payload.pronunciation;
-                        entries[idx].example = payload.example;
-                        entries[idx].student_name = payload.student_name;
-                    }
-                    saveLocalEntries(entries);
-                    cancelEdit(true);
-                    renderGrid(getSortedLocalEntries(payload.orden), targetId);
-                    showNotification(`¡Los cambios en "${payload.word}" fueron guardados con éxito!`, 'success');
-                } else {
-                    const nowMs = Date.now();
-                    targetId = nowMs;
-                    entries.push({
-                        id: nowMs,
-                        timestamp: nowMs,
-                        word: payload.word,
-                        meaning: payload.meaning,
-                        pronunciation: payload.pronunciation,
-                        example: payload.example,
-                        student_name: payload.student_name,
-                        created_at: formatNow()
-                    });
-                    saveLocalEntries(entries);
-                    wordInput.value = '';
-                    meaningInput.value = '';
-                    pronunciationInput.value = '';
-                    exampleInput.value = '';
-                    studentInput.value = '';
-                    renderGrid(getSortedLocalEntries(payload.orden), targetId);
-                    showNotification(`¡La palabra "${payload.word}" fue cargada con éxito!`, 'success');
-                }
-                wordInput.focus();
-                return;
-            }
-
             btnCargar.disabled = true;
             btnCargar.textContent = isEditing ? 'Guardando...' : 'Cargando...';
+
+            if (IS_STATIC_HOST) {
+                try {
+                    if (FIREBASE_DB_URL) {
+                        const cleanUrl = FIREBASE_DB_URL.replace(/\/+$/, '');
+                        let targetId = editId;
+
+                        if (isEditing) {
+                            await fetch(`${cleanUrl}/entries/${encodeURIComponent(editId)}.json`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    word: payload.word,
+                                    meaning: payload.meaning,
+                                    pronunciation: payload.pronunciation,
+                                    example: payload.example,
+                                    student_name: payload.student_name
+                                })
+                            });
+                            cancelEdit(true);
+                            const entries = await fetchStaticEntries(payload.orden);
+                            renderGrid(entries, targetId);
+                            showNotification(`¡Los cambios en "${payload.word}" fueron guardados con éxito!`, 'success');
+                        } else {
+                            const nowMs = Date.now();
+                            const res = await fetch(`${cleanUrl}/entries.json`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    timestamp: nowMs,
+                                    word: payload.word,
+                                    meaning: payload.meaning,
+                                    pronunciation: payload.pronunciation,
+                                    example: payload.example,
+                                    student_name: payload.student_name,
+                                    created_at: formatNow()
+                                })
+                            });
+                            const created = await res.json();
+                            targetId = created && created.name ? created.name : nowMs;
+                            wordInput.value = '';
+                            meaningInput.value = '';
+                            pronunciationInput.value = '';
+                            exampleInput.value = '';
+                            studentInput.value = '';
+                            const entries = await fetchStaticEntries(payload.orden);
+                            renderGrid(entries, targetId);
+                            showNotification(`¡La palabra "${payload.word}" fue cargada con éxito!`, 'success');
+                        }
+                        wordInput.focus();
+                        return;
+                    }
+
+                    // Fallback localStorage si aún no se configuró FIREBASE_DB_URL
+                    const entries = getLocalEntries();
+                    let targetId = editId;
+
+                    if (isEditing) {
+                        const idx = entries.findIndex(item => String(item.id) === String(editId));
+                        if (idx !== -1) {
+                            entries[idx].word = payload.word;
+                            entries[idx].meaning = payload.meaning;
+                            entries[idx].pronunciation = payload.pronunciation;
+                            entries[idx].example = payload.example;
+                            entries[idx].student_name = payload.student_name;
+                        }
+                        saveLocalEntries(entries);
+                        cancelEdit(true);
+                        renderGrid(sortEntriesArray(entries, payload.orden), targetId);
+                        showNotification(`¡Los cambios en "${payload.word}" fueron guardados con éxito!`, 'success');
+                    } else {
+                        const nowMs = Date.now();
+                        targetId = nowMs;
+                        entries.push({
+                            id: nowMs,
+                            timestamp: nowMs,
+                            word: payload.word,
+                            meaning: payload.meaning,
+                            pronunciation: payload.pronunciation,
+                            example: payload.example,
+                            student_name: payload.student_name,
+                            created_at: formatNow()
+                        });
+                        saveLocalEntries(entries);
+                        wordInput.value = '';
+                        meaningInput.value = '';
+                        pronunciationInput.value = '';
+                        exampleInput.value = '';
+                        studentInput.value = '';
+                        renderGrid(sortEntriesArray(entries, payload.orden), targetId);
+                        showNotification(`¡La palabra "${payload.word}" fue cargada con éxito!`, 'success');
+                    }
+                    wordInput.focus();
+                } finally {
+                    btnCargar.disabled = false;
+                    const stillEditing = Boolean(document.getElementById('edit-entry-id')?.value);
+                    btnCargar.textContent = stillEditing ? 'Guardar' : 'Cargar';
+                }
+                return;
+            }
 
             const targetUrl = isEditing ? `/editar/${encodeURIComponent(editId)}` : '/agregar';
 
