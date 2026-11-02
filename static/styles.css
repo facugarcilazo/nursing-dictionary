@@ -105,16 +105,38 @@ html, body {
 
 .title-group {
     display: flex;
-    align-items: baseline;
-    gap: 0.9rem;
+    align-items: center;
+    gap: 1rem;
     flex-wrap: wrap;
 }
 
+.nursing-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.65rem;
+}
+
+.nursing-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    background-color: rgba(255, 77, 106, 0.12);
+    border: 1.5px solid rgba(255, 77, 106, 0.6);
+    color: var(--neon-red);
+    box-shadow: 0 0 8px rgba(255, 77, 106, 0.25);
+}
+
 .title-group h1 {
+    font-family: 'Montserrat', sans-serif;
     font-size: 1.35rem;
-    font-weight: 700;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1.4px;
     color: var(--neon-blue);
-    text-shadow: 0 0 4px rgba(0, 243, 255, 0.6), 0 0 10px rgba(0, 168, 255, 0.4);
+    text-shadow: 0 0 4px rgba(0, 243, 255, 0.5), 0 0 10px rgba(0, 168, 255, 0.35);
 }
 
 .subtitle {
@@ -320,15 +342,17 @@ html, body {
 
 /* Fila 1: Título "Nursing Student's Dictionary" */
 .sheet-title-row .sheet-main-title {
+    font-family: 'Montserrat', sans-serif;
     background-color: #070b18;
     color: var(--neon-blue);
     text-shadow: 0 0 5px var(--neon-blue), 0 0 12px var(--neon-blue-dark);
-    font-size: 1.1rem;
-    font-weight: 700;
+    font-size: 1.05rem;
+    font-weight: 800;
+    text-transform: uppercase;
     text-align: center;
-    padding: 0.45rem;
+    padding: 0.5rem;
     border: 1px solid var(--neon-blue-dark);
-    letter-spacing: 0.5px;
+    letter-spacing: 1.5px;
 }
 
 /* Fila 2: Encabezados de columnas */
