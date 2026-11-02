@@ -190,7 +190,7 @@ function startEdit(btnElement) {
     }
 }
 
-function cancelEdit(clearStudent = false) {
+function cancelEdit(clearStudent = true) {
     const editIdInput = document.getElementById('edit-entry-id');
     const wordInput = document.getElementById('word');
     const meaningInput = document.getElementById('meaning');
@@ -407,6 +407,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     meaningInput.value = '';
                     pronunciationInput.value = '';
                     exampleInput.value = '';
+                    studentInput.value = '';
                     renderGrid(getSortedLocalEntries(payload.orden), targetId);
                     showNotification(`¡La palabra "${payload.word}" fue cargada con éxito!`, 'success');
                 }
@@ -439,6 +440,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         meaningInput.value = '';
                         pronunciationInput.value = '';
                         exampleInput.value = '';
+                        studentInput.value = '';
                     }
                     renderGrid(data.entries, data.entry.id);
                     showNotification(data.message, 'success');
