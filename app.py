@@ -24,8 +24,8 @@ def create_app():
             sort_by = 'fecha'
 
         entries = get_sorted_entries(sort_by)
-        min_rows = 25
-        empty_rows = max(0, min_rows - len(entries))
+        min_rows = 85
+        empty_rows = max(60, min_rows - len(entries))
 
         return render_template(
             'index.html',

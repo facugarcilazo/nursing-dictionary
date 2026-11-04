@@ -1,4 +1,5 @@
-const MIN_GRID_ROWS = 25;
+const MIN_GRID_ROWS = 85;
+const EXTRA_EMPTY_ROWS = 60;
 const STORAGE_KEY = 'nursing_dictionary_entries_v1';
 
 // URL de Firebase Realtime Database para persistencia compartida en la nube en GitHub Pages (.github.io)
@@ -136,7 +137,7 @@ function renderGrid(entries, highlightId = null) {
         `;
     });
 
-    const emptyCount = Math.max(0, MIN_GRID_ROWS - entries.length);
+    const emptyCount = Math.max(EXTRA_EMPTY_ROWS, MIN_GRID_ROWS - entries.length);
     for (let i = 0; i < emptyCount; i++) {
         const rowNum = entries.length + i + 3;
         html += `
